@@ -15,7 +15,7 @@ st.title("Audio Harmonic Analyzer and Resynthesizer")
 st.write("Upload an audio file, view its spectrum A(f), detect peaks, and resynthesize for A/B comparison.")
 
 # tabs for different features: first tab is single-file analysis, second tab is two-file comparison
-tab1, tab2 = st.tabs(["Single Audio Analysis", "Two Recording Comparison"])
+tab1, tab2, tab3 = st.tabs(["Single Audio Analysis", "Two Recording Comparison", "Playground"])
 
 def load_audio(file_bytes: bytes, target_sr: int = 44100):
     # attempt decoding with soundfile first for efficiency; fall back to librosa on failure
@@ -533,3 +533,397 @@ with tab2:
         
     else:
         st.info("Please upload both actual and theoretical recordings to perform comparison.")  # require both recordings to proceed with comparison
+
+with tab3:
+        st.write("Interactive piano playground using generated notes (G2–C6). click keys or use keyboard to play/stop. peak-start playback ensures immediate sound.")
+
+        # define note names from G2 to C6 (inclusive) using equal-temperament sequence of semitones
+        white_keys_order = [
+                # octave 2
+                "G2", "A2", "B2",
+                # octave 3
+                "C3", "D3", "E3", "F3", "G3", "A3", "B3",
+                # octave 4
+                "C4", "D4", "E4", "F4", "G4", "A4", "B4",
+                # octave 5
+                "C5", "D5", "E5", "F5", "G5", "A5", "B5",
+                # octave 6 (up to C6)
+                "C6",
+        ]
+
+        # corresponding black keys positioned between white keys where applicable
+        black_keys_map = {
+                "G2": "G#2", "A2": "A#2",
+                "C3": "C#3", "D3": "D#3",
+                "F3": "F#3", "G3": "G#3", "A3": "A#3",
+                "C4": "C#4", "D4": "D#4",
+                "F4": "F#4", "G4": "G#4", "A4": "A#4",
+                "C5": "C#5", "D5": "D#5",
+                "F5": "F#5", "G5": "G#5", "A5": "A#5",
+        }
+
+        # keyboard mapping (US layout) for white and black keys, spatially arranged left to right
+        keymap_white = [
+                "z", "x", "c",
+                "v", "b", "n", "m", ",", ".", "/",
+                "q", "w", "e", "r", "t", "y", "u",
+                "i", "o", "p", "[", "]", "\\",
+                "1",
+        ]
+        keymap_black = {
+                "z": "s", "x": "d",
+                "v": "g", "b": "h", "n": "j",
+                    "m": "k", ",": "l", ".": ";",
+                "q": "2", "w": "3",
+                "r": "5", "t": "6", "y": "7",
+                "i": "9", "o": "0",
+                # higher row approximations
+                "p": "-", "[": "=",
+                "1": None,
+        }
+
+        # attempt to load audio files for each note and compute peak start times
+        import base64
+
+        def load_note_audio(note_name: str):
+                folder = os.path.join(os.path.dirname(__file__), "gen_sounds", "high_quality")
+                path = os.path.join(folder, f"{note_name}.wav")
+                if not os.path.exists(path):
+                        return None, None
+                y, sr = sf.read(path, always_2d=False)
+                if y.ndim == 2:
+                        y = np.mean(y, axis=1)
+                # compute index of maximum absolute amplitude to start playback at loudest point
+                idx_peak = int(np.argmax(np.abs(y)))
+                peak_time = float(idx_peak) / float(sr)
+                # encode to base64 for embedding
+                with open(path, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode("ascii")
+                src = f"data:audio/wav;base64,{b64}"
+                return src, peak_time
+
+        notes_data = {}
+        for wn in white_keys_order:
+                src, t0 = load_note_audio(wn)
+                if src is not None:
+                        notes_data[wn] = {"src": src, "t0": t0}
+        for wk, bk in black_keys_map.items():
+                # include black keys only if their audio exists
+                if bk:
+                        src, t0 = load_note_audio(bk)
+                        if src is not None:
+                                notes_data[bk] = {"src": src, "t0": t0}
+
+        # build a simple predefined (approximate) sequence for fur elise in e minor
+        # sequence of (note, start_time_seconds, duration_seconds)
+        fur_elise_sequence = [
+            # --- Pickup ---
+            ("E5", 0.00, 0.15), ("D#5", 0.15, 0.15),
+
+            # --- Measure 1 (Main Motif) ---
+            ("E5", 0.30, 0.15), ("D#5", 0.45, 0.15), ("E5", 0.60, 0.15),
+            ("B4", 0.75, 0.15), ("D5", 0.90, 0.15), ("C5", 1.05, 0.15),
+
+            # --- Measure 2 (A Minor Arpeggio) ---
+            # Melody lands on A4; LH plays A-E-A
+            ("A4", 1.20, 0.60), ("A2", 1.20, 0.15), # Downbeat
+            ("E3", 1.35, 0.15),                     # LH
+            ("A3", 1.50, 0.15),                     # LH
+            # RH continues upward arpeggio
+            ("C4", 1.65, 0.15), ("E4", 1.80, 0.15), ("A4", 1.95, 0.15),
+
+            # --- Measure 3 (E Major Arpeggio) ---
+            # Melody lands on B4; LH plays E-E-G#
+            ("B4", 2.10, 0.60), ("E2", 2.10, 0.15), # Downbeat
+            ("E3", 2.25, 0.15),                     # LH
+            ("G#3", 2.40, 0.15),                    # LH
+            # RH continues upward arpeggio
+            ("E4", 2.55, 0.15), ("G#4", 2.70, 0.15), ("B4", 2.85, 0.15),
+
+            # --- Measure 4 (Resolution) ---
+            # Melody lands on C5; LH plays A-E-A
+            ("C5", 3.00, 0.60), ("A2", 3.00, 0.15), # Downbeat
+            ("E3", 3.15, 0.15),                     # LH
+            ("A3", 3.30, 0.15),                     # LH
+            # Pickup to repeat (E-D#...)
+            ("E5", 3.45, 0.15), ("D#5", 3.60, 0.15),
+
+            # --- Measure 5 (Repeat of Main Motif) ---
+            ("E5", 3.75, 0.15), ("D#5", 3.90, 0.15), ("E5", 4.05, 0.15),
+            ("B4", 4.20, 0.15), ("D5", 4.35, 0.15), ("C5", 4.50, 0.15),
+
+            # --- Measure 6 (A Minor Arpeggio) ---
+            ("A4", 4.65, 0.60), ("A2", 4.65, 0.15),
+            ("E3", 4.80, 0.15),
+            ("A3", 4.95, 0.15),
+            ("C4", 5.10, 0.15), ("E4", 5.25, 0.15), ("A4", 5.40, 0.15),
+
+            # --- Measure 7 (E Major Arpeggio) ---
+            ("B4", 5.55, 0.60), ("E2", 5.55, 0.15),
+            ("E3", 5.70, 0.15),
+            ("G#3", 5.85, 0.15),
+            ("D4", 6.00, 0.15), ("C5", 6.15, 0.15), ("B4", 6.30, 0.15),
+
+            # --- Measure 8 (Final Resolution of Theme A) ---
+            # Lands on A4; LH plays A-E-A
+            ("A4", 6.45, 0.90), ("A2", 6.45, 0.30),
+            ("E3", 6.75, 0.30), ("A3", 7.05, 0.30),
+        ]
+
+        st.write("press keys or click to play; click again or release to stop. use the play button to start an illustrative fur elise motif.")
+
+        # render interactive keyboard via html/js component
+        import json
+        from streamlit.components.v1 import html
+
+        keyboard_notes = {
+                "white": white_keys_order,
+                "black": black_keys_map,
+                "keymap_white": keymap_white,
+                "keymap_black": keymap_black,
+                "audio": notes_data,
+                "sequence": fur_elise_sequence,
+        }
+
+        comp_height = 420
+        html_content = f"""
+        <style>
+            .piano {{
+                position: relative;
+                width: 100%;
+                max-width: 1200px;
+                margin: 12px auto;
+                user-select: none;
+            }}
+            .white-keys {{
+                display: grid;
+                grid-template-columns: repeat({len(white_keys_order)}, 1fr);
+                gap: 2px;
+                    position: relative;
+                    z-index: 2;
+            }}
+            .white-key {{
+                background: #fff;
+                border: 1px solid #ccc;
+                height: 160px;
+                position: relative;
+                text-align: center;
+                font-family: sans-serif;
+                font-size: 12px;
+                line-height: 24px;
+            }}
+            .keycap-label {{
+                position: absolute;
+                top: 4px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.06);
+                border: 1px solid rgba(0,0,0,0.15);
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 11px;
+                color: #333;
+                 z-index: 5; /* ensure visible above overlapping black keys */
+            }}
+            .white-key.active {{
+                background: #cfe8ff;
+                border-color: #66a3ff;
+            }}
+            .black-keys {{
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 120px;
+                pointer-events: none;
+                    z-index: 3; /* sit above white keys */
+            }}
+            .black-key {{
+                position: absolute;
+                width: calc(100% / {len(white_keys_order)} * 0.6);
+                height: 120px;
+                background: #000;
+                border: 1px solid #333;
+                transform: translateX(-50%);
+                pointer-events: auto;
+                z-index: 3;
+            }}
+            .black-key .keycap-label {{
+                background: rgba(255,255,255,0.15);
+                border-color: rgba(255,255,255,0.25);
+                color: #f5f5f5;
+                    z-index: 6;
+            }}
+            .black-key.active {{
+                background: #444;
+            }}
+            .controls {{
+                margin: 8px 0 16px 0;
+                font-family: sans-serif;
+            }}
+            .note-label {{ position: absolute; bottom: 4px; left: 4px; color: #555; }}
+        </style>
+
+        <div class="controls">
+            <button id="play-seq">Play Fur Elise motif</button>
+            <span id="status" style="margin-left:10px;color:#555"></span>
+        </div>
+        <div class="piano" id="piano"></div>
+
+        <script>
+            const data = {json.dumps(keyboard_notes)};
+
+            // create audio elements for each note
+            const audioMap = new Map();
+            for (const [note, info] of Object.entries(data.audio)) {{
+                const a = new Audio();
+                a.src = info.src;
+                a.preload = 'auto';
+                a.loop = true; // sustain when held
+                audioMap.set(note, {{ el: a, t0: info.t0 }});
+            }}
+
+            // build keyboard UI
+            const piano = document.getElementById('piano');
+            const whiteWrap = document.createElement('div');
+            whiteWrap.className = 'white-keys';
+            const blackWrap = document.createElement('div');
+            blackWrap.className = 'black-keys';
+            piano.appendChild(whiteWrap);
+            piano.appendChild(blackWrap);
+
+            // positions for black keys relative to white indices
+            function whiteIndex(note) {{ return data.white.indexOf(note); }}
+
+            const keyElems = new Map();
+
+            // build note -> computer key label lookup
+            const noteToKey = new Map();
+            data.keymap_white.forEach((key, i) => {{
+                const note = data.white[i];
+                if (note) noteToKey.set(note, key);
+            }});
+            for (const [wn, bk] of Object.entries(data.black)) {{
+                const whiteKeyChar = data.keymap_white[data.white.indexOf(wn)];
+                const blackKeyChar = data.keymap_black[whiteKeyChar];
+                if (bk && blackKeyChar) noteToKey.set(bk, blackKeyChar);
+            }}
+
+            data.white.forEach((note, idx) => {{
+                const w = document.createElement('div');
+                w.className = 'white-key';
+                w.dataset.note = note;
+                const keycap = document.createElement('div');
+                keycap.className = 'keycap-label';
+                keycap.textContent = noteToKey.get(note) || '';
+                const noteLbl = document.createElement('div');
+                noteLbl.className = 'note-label';
+                noteLbl.textContent = note;
+                w.appendChild(keycap);
+                w.appendChild(noteLbl);
+                whiteWrap.appendChild(w);
+                keyElems.set(note, w);
+
+                const bk = data.black[note];
+                if (bk && data.audio[bk]) {{
+                    const b = document.createElement('div');
+                    b.className = 'black-key';
+                    b.dataset.note = bk;
+                    // place over between current and next white key
+                      const leftPercent = (idx + 1) / data.white.length * 100;
+                      b.style.left = `calc(${{leftPercent}}% - (100% / ${{data.white.length}} * 0.2))`;
+                                        const keycapB = document.createElement('div');
+                                        keycapB.className = 'keycap-label';
+                                        keycapB.textContent = noteToKey.get(bk) || '';
+                                        b.appendChild(keycapB);
+                    blackWrap.appendChild(b);
+                    keyElems.set(bk, b);
+                }}
+            }});
+
+            function playNote(note) {{
+                const item = audioMap.get(note);
+                if (!item) return;
+                const {{ el, t0 }} = item;
+                try {{
+                    el.currentTime = t0;
+                    el.play();
+                    const k = keyElems.get(note);
+                    if (k) k.classList.add('active');
+                }} catch (e) {{ console.warn('play error', e); }}
+            }}
+
+            function stopNote(note) {{
+                const item = audioMap.get(note);
+                if (!item) return;
+                const {{ el }} = item;
+                try {{
+                    el.pause();
+                    const k = keyElems.get(note);
+                    if (k) k.classList.remove('active');
+                }} catch (e) {{ console.warn('pause error', e); }}
+            }}
+
+            // mouse interactions: click to toggle hold; click again to stop
+            function handleKeyClick(evt) {{
+                const note = evt.target.dataset.note || (evt.target.closest('[data-note]')?.dataset.note);
+                if (!note) return;
+                const item = audioMap.get(note);
+                if (!item) return;
+                if (item.el.paused) {{
+                    playNote(note);
+                }} else {{
+                    stopNote(note);
+                }}
+            }}
+            whiteWrap.addEventListener('click', handleKeyClick);
+            blackWrap.addEventListener('click', handleKeyClick);
+
+            // keyboard mapping: press to play, release to stop
+            const whiteMap = new Map();
+            data.keymap_white.forEach((key, i) => {{
+                const note = data.white[i];
+                if (note) whiteMap.set(key, note);
+            }});
+            const blackMap = new Map();
+            for (const [wn, bk] of Object.entries(data.black)) {{
+                const k = data.keymap_black[ data.keymap_white[ data.white.indexOf(wn) ] ];
+                if (k && bk) blackMap.set(k, bk);
+            }}
+
+            const downSet = new Set();
+            window.addEventListener('keydown', (e) => {{
+                const key = e.key;
+                if (downSet.has(key)) return; // avoid repeats
+                let note = whiteMap.get(key) || blackMap.get(key);
+                if (note) {{
+                    downSet.add(key);
+                    playNote(note);
+                    e.preventDefault();
+                }}
+            }});
+            window.addEventListener('keyup', (e) => {{
+                const key = e.key;
+                let note = whiteMap.get(key) || blackMap.get(key);
+                if (note) {{
+                    downSet.delete(key);
+                    stopNote(note);
+                    e.preventDefault();
+                }}
+            }});
+
+            // play predefined fur elise motif and show active notes in realtime
+            const statusEl = document.getElementById('status');
+            document.getElementById('play-seq').addEventListener('click', () => {{
+                statusEl.textContent = 'playing motif...';
+                const tStart = performance.now() / 1000.0;
+                for (const [note, t, dur] of data.sequence) {{
+                    setTimeout(() => {{ playNote(note); }}, Math.max(0, (t - (performance.now()/1000.0 - tStart)) * 1000));
+                    setTimeout(() => {{ stopNote(note); }}, Math.max(0, (t + dur - (performance.now()/1000.0 - tStart)) * 1000));
+                }}
+                setTimeout(() => {{ statusEl.textContent = ''; }}, ((data.sequence.at(-1)[1] + data.sequence.at(-1)[2]) - (performance.now()/1000.0 - tStart)) * 1000 + 200);
+            }});
+        </script>
+        """
+
+        html(html_content, height=comp_height)
