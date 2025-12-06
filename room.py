@@ -5,7 +5,7 @@ from scipy.io.wavfile import read, write
 
 #Load violin recording
 print("Loading audio file...")
-fs, violin = read("testG.wav")
+fs, violin = read("gen_sounds/high_quality/G3.wav")
 violin = violin.astype(float)
 if violin.ndim > 1:
     violin = violin.mean(axis=1)
@@ -15,9 +15,7 @@ duration = len(violin) / fs
 t = np.linspace(0, duration, len(violin))
 print(f"Loaded: {duration:.2f} seconds, {fs} Hz sample rate")
 
-
-
-# Room parameters 
+## ----------- room parameters ----------- ##
 # #Natural room
 # f_rooms = [45, 80, 120, 180, 250]
 # zeta = [0.08, 0.1, 0.12, 0.12, 0.14]
@@ -26,7 +24,6 @@ print(f"Loaded: {duration:.2f} seconds, {fs} Hz sample rate")
 ''' The resonances of these modes is amplifying the fundamentals which adds to the bass sound'''
 f_rooms = [50, 95, 140, 220, 380]  
 zeta = [0.06, 0.07, 0.08, 0.09, 0.1]  # Lower damping = longer resonance ring
-
 
 # # Tiny boxy room
 # f_rooms = [150, 300, 450, 600, 900]
@@ -39,9 +36,7 @@ coupling = 1.5  # I found anything >0.8 is pretty strong effect
 
 
 
-
-
-#Room ODE system
+## ----------- room ODE system ----------- ##
 def multimode_room(t_now, y):
     dydt = np.zeros_like(y)
     input_force = np.interp(t_now, np.arange(len(violin))/fs, violin)
@@ -51,8 +46,6 @@ def multimode_room(t_now, y):
         dydt[pos] = y[vel]
         dydt[vel] = -2*zeta[i]*omega[i]*y[vel] - omega[i]**2*y[pos] + coupling * omega[i]**2 * input_force
     return dydt
-
-
 
 #Solve ODE system
 print("Solving room dynamics...")
@@ -83,7 +76,7 @@ y_room = np.sum(y_modes, axis=0)
 
 
 
-#Add echo effects 
+## ----------- add echo effects ----------- ##
 def add_echo(signal, delays_ms, gains, sample_rate):
     ''' This was pretty important cause it made the resonance sounds much more obvious (also made it sound more dramatic lol)
         Echo delays that are longer create an effect that amplifies and reinforces low frequencies - largely responsible for the strong bass sound
@@ -111,16 +104,12 @@ y_room_with_echo = add_echo(y_room, echo_delays, echo_gains, fs)
 
 
 
-
-
-
-
-# Mix original signal with room response
+## ----------- mix original signal with room response ----------- ##
 #mix_ratio = 0.4  # Amount of original sound (1-mix_ratio is % of room resonance sound)
 mix_ratio = 0.7 
 y_total = mix_ratio * violin + (1 - mix_ratio) * y_room_with_echo
 
-# Normalize carefully
+# Normalize 
 y_total /= np.max(np.abs(y_total)) * 1.1
 
 # Debug output
@@ -131,7 +120,7 @@ print(f"Max amplitude: {np.max(np.abs(y_total)):.3f}")
 
 
 
-
+## ----------- output ----------- ##
 #Save processed sound
 scaled = np.int16(y_total * 32767)
 write("violin_in_room.wav", fs, scaled)

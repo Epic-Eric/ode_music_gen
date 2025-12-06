@@ -10,15 +10,16 @@ import librosa
 import librosa.display
 
 
-st.set_page_config(page_title="ODE Music Analyzer", layout="wide", page_icon="🎻")
+st.set_page_config(page_title="ODE Music Analyzer", layout="wide")
 st.title("Audio Harmonic Analyzer and Resynthesizer")
 st.write("Upload an audio file, view its spectrum A(f), resynthesize for A/B comparison, and play music in playground.")
 
-# tabs for different features: first tab is single-file analysis, second tab is two-file comparison
+#1 is single-file analysis, 2 is two-file comparison, 3 is playground
 tab1, tab2, tab3 = st.tabs(["Single Audio Analysis", "Two Recording Comparison", "Playground"])
 
+## --------------  HELPER FUNCTIONS  -------------- ##
 def load_audio(file_bytes: bytes, target_sr: int = 44100):
-    # attempt decoding with soundfile first for efficiency; fall back to librosa on failure
+    #just loading audio lol
     try:
         data, sr = sf.read(io.BytesIO(file_bytes), always_2d=False)
         if data.ndim == 2:
@@ -27,17 +28,16 @@ def load_audio(file_bytes: bytes, target_sr: int = 44100):
             data = librosa.resample(data, orig_sr=sr, target_sr=target_sr)
             sr = target_sr
         return data.astype(np.float32), sr
-    except Exception:
-        # suppress mpg123 and id3 related stderr warnings during fallback load
+    except Exception: #fallback to librosa for unsupported formats
         with open(os.devnull, 'w') as devnull, contextlib.redirect_stderr(devnull):
             y, sr = librosa.load(io.BytesIO(file_bytes), sr=target_sr, mono=True)
         return y.astype(np.float32), sr
 
 
 def compute_spectrum(y: np.ndarray, sr: int):
-    # create analysis window and perform fft
+    #create analysis window and perform fft
     n = len(y)
-    # choose the next power of two greater than or equal to n (minimum 1024) for fft efficiency
+    #choose the next power of two greater than or equal to n (minimum 1024) for fft efficiency
     nfft = int(2 ** np.ceil(np.log2(max(1024, n))))
     win = np.hanning(min(n, nfft))
     x = np.zeros(nfft, dtype=np.float32)
@@ -51,22 +51,22 @@ def compute_spectrum(y: np.ndarray, sr: int):
 
 def pick_peaks(freq: np.ndarray, mag: np.ndarray, phase: np.ndarray,
                min_prominence: float, max_peaks: int, fmin: float, fmax: float):
-    # perform simple local maximum peak selection with a prominence threshold
+    #perform simple local maximum peak selection with a prominence threshold
     mask = (freq >= fmin) & (freq <= fmax)
     idxs = np.flatnonzero(mask)
     f = freq[mask]
     m = mag[mask]
     if len(m) < 3:
         return np.array([]), np.array([]), np.array([])
-    # normalize magnitudes to stabilize thresholding
+    #normalize magnitudes to stabilize thresholding
     m_norm = m / (np.max(m) + 1e-9)
     peaks = []
     for i in range(1, len(m_norm) - 1):
         if m_norm[i] > m_norm[i-1] and m_norm[i] > m_norm[i+1] and m_norm[i] >= min_prominence:
-            # record absolute fft bin index for phase retrieval
+            #record absolute fft bin index for phase retrieval
             abs_idx = int(idxs[i])
             peaks.append((float(f[i]), float(m_norm[i]), abs_idx))
-    # sort peaks by descending magnitude and retain the top k
+    #sort peaks by descending magnitude and retain the top k
     peaks.sort(key=lambda t: t[1], reverse=True)
     peaks = peaks[:max_peaks]
     if not peaks:
@@ -74,7 +74,7 @@ def pick_peaks(freq: np.ndarray, mag: np.ndarray, phase: np.ndarray,
     pf = np.array([p[0] for p in peaks], dtype=np.float32)
     pa = np.array([p[1] for p in peaks], dtype=np.float32)
     pph = np.array([phase[p[2]] for p in peaks], dtype=np.float32)
-    return pf, pa, pph
+    return pf, pa, pph # frequencies, amplitudes, phases
 
 
 def pick_peaks_nms(
@@ -87,7 +87,7 @@ def pick_peaks_nms(
     min_distance_hz: float = 20.0,
     min_prominence_norm: float = 0.0,
 ):
-    """non-maximum suppression peak picking.
+    """non-maximum suppression peak picking. we're adopting this strategy because in actual sound, the peaks aren't exact integer harmonics of each other. you might have 100, 201, 303. If you search normally, you would get 100, 200, 300 which is incorrect. With this a search window, you can make sure you find the correct peak. The min_distance_hz is found using heuristics.
 
     steps:
     - identify local maxima within the specified frequency range.
@@ -271,7 +271,7 @@ def detect_fundamental_frequency(freq: np.ndarray, mag: np.ndarray, min_freq: fl
     
     return float(fundamental_freq)
 
-
+## --------------  WEB APP  -------------- ##
 with tab1:
     st.write("Upload an audio file, view its spectrum A(f), detect peaks, and resynthesize for A/B comparison.")  # single-file analysis workflow
     
