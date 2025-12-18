@@ -6,7 +6,7 @@ import struct
 # Constants
 P_H = 0.04  # Height of the triangle wave (maximum displacement)
 L = 32.8/100  # Length of the string (32.8 cm)
-NOTE = "E"  # change this
+NOTE = "G"  # change this
 
 def get_constants(note = NOTE):
     # data from https://ccrma.stanford.edu/~jos/stiffbowed/Modeling_stiffness_string.html
