@@ -679,7 +679,7 @@ with tab3:
     st.markdown("---")
 
     # section 2: list all high-quality ODE notes
-    st.markdown("**All ODE-Generated Notes**")
+    st.markdown("**All ODE-Generated Notes (RK4) **")
     hq_dir = os.path.join(os.path.dirname(__file__), "gen_sounds", "full_ODE")
     if os.path.isdir(hq_dir):
         wavs = sorted([f for f in os.listdir(hq_dir) if f.lower().endswith('.wav')])

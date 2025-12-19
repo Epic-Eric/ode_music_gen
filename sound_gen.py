@@ -3,8 +3,8 @@ from scipy.io.wavfile import write
 import math
 
 # simulation parameters
-fs = 44100              
-dt = 1/fs               
+fs = 44100 # sampling rate
+dt = 1/fs
 duration = 8.0          #sustained G note
 steps = int(duration*fs)
 
@@ -12,34 +12,34 @@ steps = int(duration*fs)
 f1 = 440     #fundamental freq of D string
 
 # physical parameters for G string
-M = 30
-L = 0.328
-rho_l = 6e-4
+M = 30 # number of harmonics 
+L = 0.328 # string length in meters (https://knutsacoustics.com/files/Typical-string-properties.pdf)
+rho_l = 6e-4 # linear mass density in kg/m (https://knutsacoustics.com/files/Typical-string-properties.pdf)
 
 # compute tension needed so f1 = (1/(2L)) * sqrt(T/(rho_l*L))
 T = (2*L*f1)**2 * (rho_l * L)
 
-xb = 0.1*L
+xb = 0.1*L # bowing position, 10% from bridge
 
-mu_s = 0.8
-mu_k = 0.3
-vs = 0.1
-g = 120.0
-k_bristle = 80.0
-N_force = 0.1       
-vb = 0.001               #slightly lower bow speed to maintain sound against friction
+mu_s = 0.8 # coefficient of static friction (check report for more info)
+mu_k = 0.3 # coefficient of kinetic friction (check report for more info)
+vs = 0.1 # Stribeck velocity (check report for more info)
+g = 120.0 # bristle relaxation rate, determined by heurisitcs and experimentation
+k_bristle = 80.0 # bristle stiffness
+N_force = 0.1 # normal force, determined by heurisitcs and experimentation
+vb = 0.001  # bow speed, slightly lower bow speed to maintain sound against friction
 
-mb = 0.01
+mb = 0.01 # bridge mass
 kb_br = (2*np.pi*550)**2 * mb
-rb = 0.08
+rb = 0.08 # bridge damping, (check report for more info)
 
-Sn = 2.0e-4
-V = 2.1e-3
-rho_air = 1.2
-c_air = 343.0
+Sn = 2.0e-4 # effective area of string-bridge coupling
+V = 2.1e-3 # volume of air cavity
+rho_air = 1.2 # density of air, constant
+c_air = 343.0 # speed of sound in air, constant
 mH = rho_air*Sn*0.0085
 KH = rho_air*(c_air**2)*(Sn**2) / V
-rH = 0.15
+rH = 0.15 # air resonance damping, (check report for more info)
 
 # precompute modal constants
 n = np.arange(1, M+1)
